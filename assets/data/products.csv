@@ -1,0 +1,7 @@
+id,name,description,costPrice,sellingPrice,quantity,category,imagePath,sku,isActive,createdAt,updatedAt
+1,Café Premium,Café 500g - Grão Premium,15.00,25.00,50,Bebidas,,SKU001,true,2024-01-01T00:00:00.000Z,
+2,Açúcar Cristal,Açúcar 1kg - Cristal,2.50,5.00,100,Secos,,SKU002,true,2024-01-01T00:00:00.000Z,
+3,Pão Francês,Pão 100g - Francês,0.80,2.50,150,Padaria,,SKU003,true,2024-01-01T00:00:00.000Z,
+4,Leite Integral,Leite 1L - Integral,3.50,6.00,75,Laticínios,,SKU004,true,2024-01-01T00:00:00.000Z,
+5,Chocolate Belga,Chocolate 100g - Belga,3.00,8.00,40,Doces,,SKU005,true,2024-01-01T00:00:00.000Z,
+6,Biscoito Salgado,Biscoito 200g - Salgado,2.00,5.50,80,Biscoitos,,SKU006,true,2024-01-01T00:00:00.000Z,

@@ -1,0 +1,7 @@
+{
+  "project_type": "flutter",
+  "project_language": "dart",
+  "flutter_version": "3.0.0",
+  "windows_build_supported": true,
+  "description": "Professional Point of Sale (PDV) System built with Flutter"
+}

@@ -1,0 +1,5 @@
+{
+  "run": "flutter run",
+  "build": "flutter build windows --release",
+  "devices": "flutter devices"
+}

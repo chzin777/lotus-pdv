@@ -1,0 +1,230 @@
+import 'dart:convert';
+import 'package:csv/csv.dart';
+import 'storage_service.dart';
+import '../models/sale.dart';
+
+class SaleService {
+  static const String _fileName = 'sales.csv';
+  static const String _itemsFileName = 'sales_items.csv';
+
+  static Future<bool> saveSales(List<Sale> sales) async {
+    try {
+      final salesPath = await StorageService.salesDataPath;
+      
+      List<List<dynamic>> rows = [
+        ['id', 'totalAmount', 'discountAmount', 'finalAmount', 'paymentMethod', 'status', 'userId', 'createdAt', 'cancelledAt', 'cancellationReason', 'itemCount'],
+      ];
+
+      for (var sale in sales) {
+        rows.add([
+          sale.id,
+          sale.totalAmount,
+          sale.discountAmount,
+          sale.finalAmount,
+          sale.paymentMethod,
+          sale.status,
+          sale.userId,
+          sale.createdAt.toIso8601String(),
+          sale.cancelledAt?.toIso8601String() ?? '',
+          sale.cancellationReason ?? '',
+          sale.items.length,
+        ]);
+      }
+
+      String csv = const ListToCsvConverter().convert(rows);
+      await StorageService.writeFile(_fileName, csv, directory: salesPath);
+      
+      // Save items
+      return await _saveSaleItems(sales, salesPath);
+    } catch (e) {
+      print('Error saving sales: $e');
+      return false;
+    }
+  }
+
+  static Future<bool> _saveSaleItems(List<Sale> sales, String salesPath) async {
+    try {
+      List<List<dynamic>> rows = [
+        ['saleId', 'productId', 'productName', 'quantity', 'unitPrice', 'totalPrice'],
+      ];
+
+      for (var sale in sales) {
+        for (var item in sale.items) {
+          rows.add([
+            sale.id,
+            item.productId,
+            item.productName,
+            item.quantity,
+            item.unitPrice,
+            item.totalPrice,
+          ]);
+        }
+      }
+
+      String csv = const ListToCsvConverter().convert(rows);
+      await StorageService.writeFile(_itemsFileName, csv, directory: salesPath);
+      return true;
+    } catch (e) {
+      print('Error saving sale items: $e');
+      return false;
+    }
+  }
+
+  static Future<List<Sale>> getSales() async {
+    try {
+      final salesPath = await StorageService.salesDataPath;
+      final filePath = '$salesPath/$_fileName';
+      final itemsFilePath = '$salesPath/$_itemsFileName';
+      
+      final content = await StorageService.readFile(filePath);
+      if (content.isEmpty) {
+        return [];
+      }
+
+      final itemsContent = await StorageService.readFile(itemsFilePath);
+      Map<String, List<SaleItem>> itemsMap = {};
+
+      if (itemsContent.isNotEmpty) {
+        List<List<dynamic>> itemRows = const CsvToListConverter().convert(itemsContent);
+        for (int i = 1; i < itemRows.length; i++) {
+          if (itemRows[i].isEmpty) continue;
+          
+          final saleId = itemRows[i][0].toString();
+          if (!itemsMap.containsKey(saleId)) {
+            itemsMap[saleId] = [];
+          }
+
+          itemsMap[saleId]!.add(SaleItem(
+            productId: itemRows[i][1].toString(),
+            productName: itemRows[i][2].toString(),
+            quantity: int.tryParse(itemRows[i][3].toString()) ?? 0,
+            unitPrice: double.tryParse(itemRows[i][4].toString()) ?? 0.0,
+            totalPrice: double.tryParse(itemRows[i][5].toString()) ?? 0.0,
+          ));
+        }
+      }
+
+      List<List<dynamic>> rows = const CsvToListConverter().convert(content);
+      List<Sale> sales = [];
+
+      for (int i = 1; i < rows.length; i++) {
+        if (rows[i].isEmpty) continue;
+        
+        try {
+          final saleId = rows[i][0].toString();
+          final items = itemsMap[saleId] ?? [];
+
+          sales.add(Sale(
+            id: saleId,
+            items: items,
+            totalAmount: double.tryParse(rows[i][1].toString()) ?? 0.0,
+            discountAmount: double.tryParse(rows[i][2].toString()) ?? 0.0,
+            finalAmount: double.tryParse(rows[i][3].toString()) ?? 0.0,
+            paymentMethod: rows[i][4].toString(),
+            status: rows[i][5].toString(),
+            userId: rows[i][6].toString(),
+            createdAt: DateTime.parse(rows[i][7].toString()),
+            cancelledAt: rows[i][8].toString().isEmpty ? null : DateTime.parse(rows[i][8].toString()),
+            cancellationReason: rows[i][9].toString().isEmpty ? null : rows[i][9].toString(),
+          ));
+        } catch (e) {
+          print('Error parsing sale row: $e');
+        }
+      }
+
+      return sales;
+    } catch (e) {
+      print('Error reading sales: $e');
+      return [];
+    }
+  }
+
+  static Future<Sale?> getSaleById(String id) async {
+    final sales = await getSales();
+    try {
+      return sales.firstWhere((sale) => sale.id == id);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  static Future<bool> addSale(Sale sale) async {
+    final sales = await getSales();
+    sales.add(sale);
+    return await saveSales(sales);
+  }
+
+  static Future<bool> updateSale(Sale sale) async {
+    final sales = await getSales();
+    final index = sales.indexWhere((s) => s.id == sale.id);
+    if (index != -1) {
+      sales[index] = sale;
+      return await saveSales(sales);
+    }
+    return false;
+  }
+
+  static Future<bool> cancelSale(String saleId, String reason) async {
+    final sale = await getSaleById(saleId);
+    if (sale != null && sale.status != 'cancelled') {
+      final cancelledSale = sale.copyWith(
+        status: 'cancelled',
+        cancelledAt: DateTime.now(),
+        cancellationReason: reason,
+      );
+      return await updateSale(cancelledSale);
+    }
+    return false;
+  }
+
+  static Future<List<Sale>> getSalesByDateRange(DateTime startDate, DateTime endDate) async {
+    final sales = await getSales();
+    return sales
+        .where((sale) => sale.createdAt.isAfter(startDate) && sale.createdAt.isBefore(endDate))
+        .toList();
+  }
+
+  static Future<double> getDailySalesAmount(DateTime date) async {
+    final startOfDay = DateTime(date.year, date.month, date.day);
+    final endOfDay = startOfDay.add(const Duration(days: 1));
+    
+    final sales = await getSalesByDateRange(startOfDay, endOfDay);
+    double total = 0;
+    for (var sale in sales) {
+      if (sale.status == 'completed') {
+        total += sale.finalAmount;
+      }
+    }
+    return total;
+  }
+
+  static Future<Map<String, dynamic>> getSalesReport(DateTime startDate, DateTime endDate) async {
+    final sales = await getSalesByDateRange(startDate, endDate);
+    
+    double totalRevenue = 0;
+    double totalDiscount = 0;
+    int totalItems = 0;
+    int completedSales = 0;
+    int cancelledSales = 0;
+
+    for (var sale in sales) {
+      if (sale.status == 'completed') {
+        totalRevenue += sale.finalAmount;
+        completedSales++;
+      } else if (sale.status == 'cancelled') {
+        cancelledSales++;
+      }
+      totalDiscount += sale.discountAmount;
+      totalItems += sale.items.fold(0, (sum, item) => sum + item.quantity);
+    }
+
+    return {
+      'totalRevenue': totalRevenue,
+      'totalDiscount': totalDiscount,
+      'totalItems': totalItems,
+      'completedSales': completedSales,
+      'cancelledSales': cancelledSales,
+      'averageTicket': completedSales > 0 ? totalRevenue / completedSales : 0,
+    };
+  }
+}

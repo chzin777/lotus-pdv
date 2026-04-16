@@ -1,0 +1,4 @@
+id,username,password,fullName,role,isActive,createdAt,profileImage
+1,admin,admin123,Administrador,admin,true,2024-01-01T00:00:00.000Z,
+2,vendedor,1234567,João da Silva,seller,true,2024-01-01T00:00:00.000Z,
+3,gerente,gerente123,Maria Santos,manager,true,2024-01-01T00:00:00.000Z,
