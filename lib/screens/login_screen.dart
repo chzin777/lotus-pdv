@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 import '../providers/auth_provider.dart';
@@ -17,6 +18,8 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isPasswordVisible = false;
   bool _isLoginMode = true;
   late TextEditingController _fullNameController;
+  final FocusNode _usernameFocusNode = FocusNode();
+  final FocusNode _passwordFocusNode = FocusNode();
 
   @override
   void initState() {
@@ -31,6 +34,8 @@ class _LoginScreenState extends State<LoginScreen> {
     _usernameController.dispose();
     _passwordController.dispose();
     _fullNameController.dispose();
+    _usernameFocusNode.dispose();
+    _passwordFocusNode.dispose();
     super.dispose();
   }
 
@@ -119,9 +124,19 @@ class _LoginScreenState extends State<LoginScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Image.asset(
-                      '/assets/images/logo/logo.png',
+                      'assets/images/logo/logo.png',
                       height: 120,
                       fit: BoxFit.contain,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Lotus PDV',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.righteous(
+                        fontSize: 34,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF7C3AED),
+                      ),
                     ),
                     const SizedBox(height: 24),
                     Card(
@@ -134,14 +149,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(
-                              'Lotus PDV',
-                              style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: const Color(0xFF7C3AED),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
                             Text(
                               _isLoginMode ? 'Bem-vindo de volta!' : 'Criar nova conta',
                               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
@@ -165,6 +172,8 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             TextField(
                               controller: _usernameController,
+                              focusNode: _usernameFocusNode,
+                              textInputAction: TextInputAction.next,
                               decoration: InputDecoration(
                                 labelText: 'Usuário',
                                 prefixIcon: const Icon(Icons.person_outline),
@@ -172,11 +181,16 @@ class _LoginScreenState extends State<LoginScreen> {
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                               ),
+                              onSubmitted: (_) {
+                                FocusScope.of(context).requestFocus(_passwordFocusNode);
+                              },
                             ),
                             const SizedBox(height: 16),
                             TextField(
                               controller: _passwordController,
+                              focusNode: _passwordFocusNode,
                               obscureText: !_isPasswordVisible,
+                              textInputAction: TextInputAction.done,
                               decoration: InputDecoration(
                                 labelText: 'Senha',
                                 prefixIcon: const Icon(Icons.lock_outline),
@@ -196,6 +210,13 @@ class _LoginScreenState extends State<LoginScreen> {
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                               ),
+                              onSubmitted: (_) {
+                                if (_isLoginMode) {
+                                  _handleLogin(context);
+                                } else {
+                                  _handleRegister(context);
+                                }
+                              },
                             ),
                             const SizedBox(height: 24),
                             SizedBox(

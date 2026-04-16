@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:csv/csv.dart';
 import 'storage_service.dart';
 import '../models/sale.dart';
@@ -7,17 +6,31 @@ class SaleService {
   static const String _fileName = 'sales.csv';
   static const String _itemsFileName = 'sales_items.csv';
 
+  static Map<String, int> _headerIndex(List<dynamic> headerRow) {
+    final map = <String, int>{};
+    for (int i = 0; i < headerRow.length; i++) {
+      map[headerRow[i].toString()] = i;
+    }
+    return map;
+  }
+
+  static String _cell(List<dynamic> row, int index, {String fallback = ''}) {
+    if (index < 0 || index >= row.length) return fallback;
+    return row[index].toString();
+  }
+
   static Future<bool> saveSales(List<Sale> sales) async {
     try {
       final salesPath = await StorageService.salesDataPath;
       
       List<List<dynamic>> rows = [
-        ['id', 'totalAmount', 'discountAmount', 'finalAmount', 'paymentMethod', 'status', 'userId', 'createdAt', 'cancelledAt', 'cancellationReason', 'itemCount'],
+        ['id', 'label', 'totalAmount', 'discountAmount', 'finalAmount', 'paymentMethod', 'status', 'userId', 'createdAt', 'cancelledAt', 'cancellationReason', 'itemCount'],
       ];
 
       for (var sale in sales) {
         rows.add([
           sale.id,
+          sale.label ?? '',
           sale.totalAmount,
           sale.discountAmount,
           sale.finalAmount,
@@ -107,25 +120,44 @@ class SaleService {
       List<List<dynamic>> rows = const CsvToListConverter().convert(content);
       List<Sale> sales = [];
 
+      if (rows.isEmpty) return [];
+      final header = _headerIndex(rows.first);
+      final idxId = header['id'] ?? 0;
+      final idxLabel = header['label'] ?? -1;
+      final idxTotalAmount = header['totalAmount'] ?? 1;
+      final idxDiscountAmount = header['discountAmount'] ?? 2;
+      final idxFinalAmount = header['finalAmount'] ?? 3;
+      final idxPaymentMethod = header['paymentMethod'] ?? 4;
+      final idxStatus = header['status'] ?? 5;
+      final idxUserId = header['userId'] ?? 6;
+      final idxCreatedAt = header['createdAt'] ?? 7;
+      final idxCancelledAt = header['cancelledAt'] ?? 8;
+      final idxCancellationReason = header['cancellationReason'] ?? 9;
+
       for (int i = 1; i < rows.length; i++) {
         if (rows[i].isEmpty) continue;
         
         try {
-          final saleId = rows[i][0].toString();
+          final saleId = _cell(rows[i], idxId);
           final items = itemsMap[saleId] ?? [];
 
           sales.add(Sale(
             id: saleId,
+            label: idxLabel >= 0 ? _cell(rows[i], idxLabel) : null,
             items: items,
-            totalAmount: double.tryParse(rows[i][1].toString()) ?? 0.0,
-            discountAmount: double.tryParse(rows[i][2].toString()) ?? 0.0,
-            finalAmount: double.tryParse(rows[i][3].toString()) ?? 0.0,
-            paymentMethod: rows[i][4].toString(),
-            status: rows[i][5].toString(),
-            userId: rows[i][6].toString(),
-            createdAt: DateTime.parse(rows[i][7].toString()),
-            cancelledAt: rows[i][8].toString().isEmpty ? null : DateTime.parse(rows[i][8].toString()),
-            cancellationReason: rows[i][9].toString().isEmpty ? null : rows[i][9].toString(),
+            totalAmount: double.tryParse(_cell(rows[i], idxTotalAmount)) ?? 0.0,
+            discountAmount: double.tryParse(_cell(rows[i], idxDiscountAmount)) ?? 0.0,
+            finalAmount: double.tryParse(_cell(rows[i], idxFinalAmount)) ?? 0.0,
+            paymentMethod: _cell(rows[i], idxPaymentMethod),
+            status: _cell(rows[i], idxStatus),
+            userId: _cell(rows[i], idxUserId),
+            createdAt: DateTime.parse(_cell(rows[i], idxCreatedAt)),
+            cancelledAt: _cell(rows[i], idxCancelledAt).isEmpty
+                ? null
+                : DateTime.parse(_cell(rows[i], idxCancelledAt)),
+            cancellationReason: _cell(rows[i], idxCancellationReason).isEmpty
+                ? null
+                : _cell(rows[i], idxCancellationReason),
           ));
         } catch (e) {
           print('Error parsing sale row: $e');

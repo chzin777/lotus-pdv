@@ -1,7 +1,7 @@
-import 'package:intl/intl.dart';
 
 class Sale {
   final String id;
+  final String? label;
   final List<SaleItem> items;
   final double totalAmount;
   final double discountAmount;
@@ -15,6 +15,7 @@ class Sale {
 
   Sale({
     required this.id,
+    this.label,
     required this.items,
     required this.totalAmount,
     required this.discountAmount,
@@ -32,6 +33,7 @@ class Sale {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
+      'label': label,
       'items': items.map((item) => item.toJson()).toList(),
       'totalAmount': totalAmount,
       'discountAmount': discountAmount,
@@ -55,6 +57,7 @@ class Sale {
 
     return Sale(
       id: json['id'],
+      label: json['label'],
       items: items,
       totalAmount: (json['totalAmount'] as num).toDouble(),
       discountAmount: (json['discountAmount'] as num).toDouble(),
@@ -72,6 +75,7 @@ class Sale {
 
   Sale copyWith({
     String? id,
+    String? label,
     List<SaleItem>? items,
     double? totalAmount,
     double? discountAmount,
@@ -85,6 +89,7 @@ class Sale {
   }) {
     return Sale(
       id: id ?? this.id,
+      label: label ?? this.label,
       items: items ?? this.items,
       totalAmount: totalAmount ?? this.totalAmount,
       discountAmount: discountAmount ?? this.discountAmount,

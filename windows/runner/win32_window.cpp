@@ -150,7 +150,9 @@ bool Win32Window::Create(const std::wstring& title,
 }
 
 bool Win32Window::Show() {
-  return ShowWindow(window_handle_, SW_SHOWNORMAL);
+  // Preserve the current window state (e.g., SW_MAXIMIZE requested in startup)
+  // instead of forcing a normal-sized window.
+  return ShowWindow(window_handle_, SW_SHOW);
 }
 
 // static

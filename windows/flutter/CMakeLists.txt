@@ -15,6 +15,22 @@ if (NOT DEFINED FLUTTER_TARGET_PLATFORM)
   set(FLUTTER_TARGET_PLATFORM "windows-x64")
 endif()
 
+# Workaround: in some environments the flutter tool fails to populate
+# ${EPHEMERAL_DIR}/cpp_client_wrapper, which breaks Windows builds with
+# missing *.cc sources. Ensure it exists at build time by copying it from
+# the engine artifacts in the Flutter SDK when necessary.
+if(DEFINED FLUTTER_ROOT)
+  set(_CPP_WRAPPER_SRC "${FLUTTER_ROOT}/bin/cache/artifacts/engine/${FLUTTER_TARGET_PLATFORM}/cpp_client_wrapper")
+  if(EXISTS "${_CPP_WRAPPER_SRC}/core_implementations.cc")
+    add_custom_target(ensure_cpp_client_wrapper ALL
+      COMMAND ${CMAKE_COMMAND} -E make_directory "${WRAPPER_ROOT}"
+      COMMAND ${CMAKE_COMMAND} -E copy_directory "${_CPP_WRAPPER_SRC}" "${WRAPPER_ROOT}"
+      COMMENT "Ensuring cpp_client_wrapper exists"
+      VERBATIM
+    )
+  endif()
+endif()
+
 # === Flutter Library ===
 set(FLUTTER_LIBRARY "${EPHEMERAL_DIR}/flutter_windows.dll")
 
@@ -69,6 +85,9 @@ target_link_libraries(flutter_wrapper_plugin PUBLIC flutter)
 target_include_directories(flutter_wrapper_plugin PUBLIC
   "${WRAPPER_ROOT}/include"
 )
+if(TARGET ensure_cpp_client_wrapper)
+  add_dependencies(flutter_wrapper_plugin ensure_cpp_client_wrapper)
+endif()
 add_dependencies(flutter_wrapper_plugin flutter_assemble)
 
 # Wrapper sources needed for the runner.
@@ -81,6 +100,9 @@ target_link_libraries(flutter_wrapper_app PUBLIC flutter)
 target_include_directories(flutter_wrapper_app PUBLIC
   "${WRAPPER_ROOT}/include"
 )
+if(TARGET ensure_cpp_client_wrapper)
+  add_dependencies(flutter_wrapper_app ensure_cpp_client_wrapper)
+endif()
 add_dependencies(flutter_wrapper_app flutter_assemble)
 
 # === Flutter tool backend ===

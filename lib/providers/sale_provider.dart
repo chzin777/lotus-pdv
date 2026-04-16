@@ -4,27 +4,112 @@ import '../models/product.dart';
 import '../services/sale_service.dart';
 import '../services/product_service.dart';
 
+class PaymentEntry {
+  String method;
+  double amount;
+
+  PaymentEntry({required this.method, required this.amount});
+}
+
+class DraftSale {
+  final String id;
+  String label;
+  List<SaleItem> items;
+  double discountAmount;
+
+  DraftSale({
+    required this.id,
+    required this.label,
+    List<SaleItem>? items,
+    this.discountAmount = 0,
+  }) : items = items ?? [];
+
+  int get itemCount => items.fold(0, (sum, item) => sum + item.quantity);
+  double get subtotal => items.fold(0, (sum, item) => sum + item.totalPrice);
+  double get finalAmount => (subtotal - discountAmount).clamp(0, double.infinity);
+
+  String shortSummary() {
+    if (items.isEmpty) return '(vazia)';
+    return '($itemCount itens)';
+  }
+}
+
 class SaleProvider extends ChangeNotifier {
-  List<SaleItem> _cartItems = [];
-  double _discountAmount = 0;
-  String _paymentMethod = 'Dinheiro';
+  final List<DraftSale> _drafts = [];
+  String? _activeDraftId;
+
   List<Sale> _sales = [];
   bool _isLoading = false;
   String _errorMessage = '';
 
-  List<SaleItem> get cartItems => _cartItems;
-  double get discountAmount => _discountAmount;
-  String get paymentMethod => _paymentMethod;
+  SaleProvider() {
+    // Evita mutações durante o build (ex.: criar draft dentro de getter),
+    // que podem causar asserts internos do Flutter.
+    final first = DraftSale(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      label: 'Venda 1',
+    );
+    _drafts.add(first);
+    _activeDraftId = first.id;
+  }
+
+  List<DraftSale> get drafts => List.unmodifiable(_drafts);
+  DraftSale get activeDraft {
+    final id = _activeDraftId ?? _drafts.first.id;
+    return _drafts.firstWhere((d) => d.id == id, orElse: () => _drafts.first);
+  }
+
+  String get activeDraftId => activeDraft.id;
+  List<SaleItem> get cartItems => activeDraft.items;
+  double get discountAmount => activeDraft.discountAmount;
   List<Sale> get sales => _sales;
   bool get isLoading => _isLoading;
   String get errorMessage => _errorMessage;
 
-  double get subtotal => _cartItems.fold(0, (sum, item) => sum + item.totalPrice);
-  double get finalAmount => (subtotal - _discountAmount).clamp(0, double.infinity);
-  int get itemCount => _cartItems.fold(0, (sum, item) => sum + item.quantity);
+  double get subtotal => activeDraft.subtotal;
+  double get finalAmount => activeDraft.finalAmount;
+  int get itemCount => activeDraft.itemCount;
+
+  DraftSale createDraft({String? label}) {
+    final newDraft = DraftSale(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      label: (label == null || label.trim().isEmpty)
+          ? 'Venda ${_drafts.length + 1}'
+          : label.trim(),
+    );
+    _drafts.add(newDraft);
+    _activeDraftId = newDraft.id;
+    notifyListeners();
+    return newDraft;
+  }
+
+  void selectDraft(String id) {
+    if (_drafts.any((d) => d.id == id)) {
+      _activeDraftId = id;
+      notifyListeners();
+    }
+  }
+
+  void renameDraft(String id, String label) {
+    final draft = _drafts.firstWhere((d) => d.id == id, orElse: () => activeDraft);
+    final cleaned = label.trim();
+    if (cleaned.isEmpty) return;
+    draft.label = cleaned;
+    notifyListeners();
+  }
+
+  void removeDraft(String id) {
+    if (_drafts.length <= 1) return;
+    _drafts.removeWhere((d) => d.id == id);
+    if (_activeDraftId == id) {
+      _activeDraftId = _drafts.isNotEmpty ? _drafts.first.id : null;
+    }
+    notifyListeners();
+  }
 
   void addToCart(Product product, int quantity) {
-    final existingItem = _cartItems.firstWhere(
+    final draft = activeDraft;
+    final existingItem = draft.items.firstWhere(
       (item) => item.productId == product.id,
       orElse: () => SaleItem(
         productId: product.id,
@@ -39,8 +124,8 @@ class SaleProvider extends ChangeNotifier {
       final newQuantity = existingItem.quantity + quantity;
       final newTotalPrice = product.sellingPrice * newQuantity;
       
-      final index = _cartItems.indexOf(existingItem);
-      _cartItems[index] = SaleItem(
+      final index = draft.items.indexOf(existingItem);
+      draft.items[index] = SaleItem(
         productId: product.id,
         productName: product.name,
         quantity: newQuantity,
@@ -48,7 +133,7 @@ class SaleProvider extends ChangeNotifier {
         totalPrice: newTotalPrice,
       );
     } else {
-      _cartItems.add(SaleItem(
+      draft.items.add(SaleItem(
         productId: product.id,
         productName: product.name,
         quantity: quantity,
@@ -60,18 +145,19 @@ class SaleProvider extends ChangeNotifier {
   }
 
   void removeFromCart(String productId) {
-    _cartItems.removeWhere((item) => item.productId == productId);
+    activeDraft.items.removeWhere((item) => item.productId == productId);
     notifyListeners();
   }
 
   void updateCartItemQuantity(String productId, int quantity) {
-    final index = _cartItems.indexWhere((item) => item.productId == productId);
+    final draft = activeDraft;
+    final index = draft.items.indexWhere((item) => item.productId == productId);
     if (index != -1) {
       if (quantity <= 0) {
-        _cartItems.removeAt(index);
+        draft.items.removeAt(index);
       } else {
-        final item = _cartItems[index];
-        _cartItems[index] = SaleItem(
+        final item = draft.items[index];
+        draft.items[index] = SaleItem(
           productId: item.productId,
           productName: item.productName,
           quantity: quantity,
@@ -84,37 +170,63 @@ class SaleProvider extends ChangeNotifier {
   }
 
   void setDiscount(double amount) {
-    _discountAmount = amount.clamp(0, subtotal);
-    notifyListeners();
-  }
-
-  void setPaymentMethod(String method) {
-    _paymentMethod = method;
+    activeDraft.discountAmount = amount.clamp(0, subtotal);
     notifyListeners();
   }
 
   void clearCart() {
-    _cartItems.clear();
-    _discountAmount = 0;
-    _paymentMethod = 'Dinheiro';
+    activeDraft.items.clear();
+    activeDraft.discountAmount = 0;
     notifyListeners();
   }
 
-  Future<bool> completeSale(String userId) async {
-    if (_cartItems.isEmpty) {
+  Future<bool> completeSale(String userId, {required List<PaymentEntry> payments}) async {
+    final draft = activeDraft;
+    if (draft.items.isEmpty) {
       _errorMessage = 'Carrinho vazio';
       notifyListeners();
       return false;
     }
 
     try {
+      final cleanedPayments = payments
+          .where((p) => p.amount.isFinite && p.amount > 0)
+          .toList(growable: false);
+      if (cleanedPayments.isEmpty) {
+        _errorMessage = 'Informe o valor do pagamento';
+        notifyListeners();
+        return false;
+      }
+
+      final totalPaid =
+          cleanedPayments.fold<double>(0, (sum, p) => sum + p.amount);
+      final total = finalAmount;
+      final hasCash = cleanedPayments.any((p) => p.method == 'Dinheiro');
+
+      if (totalPaid + 1e-9 < total) {
+        _errorMessage = 'Pagamento insuficiente';
+        notifyListeners();
+        return false;
+      }
+      if (totalPaid - total > 1e-9 && !hasCash) {
+        _errorMessage =
+            'Troco só é permitido quando parte do pagamento é em dinheiro';
+        notifyListeners();
+        return false;
+      }
+
+      final paymentBreakdown = cleanedPayments
+          .map((p) => '${p.method}:${p.amount.toStringAsFixed(2)}')
+          .join(';');
+
       final sale = Sale(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
-        items: List.from(_cartItems),
-        totalAmount: subtotal,
-        discountAmount: _discountAmount,
-        finalAmount: finalAmount,
-        paymentMethod: _paymentMethod,
+        label: draft.label,
+        items: List.from(draft.items),
+        totalAmount: draft.subtotal,
+        discountAmount: draft.discountAmount,
+        finalAmount: draft.finalAmount,
+        paymentMethod: paymentBreakdown,
         status: 'completed',
         userId: userId,
       );
@@ -122,7 +234,7 @@ class SaleProvider extends ChangeNotifier {
       final success = await SaleService.addSale(sale);
       if (success) {
         // Update product quantities
-        for (var item in _cartItems) {
+        for (var item in draft.items) {
           final product = await ProductService.getProductById(item.productId);
           if (product != null) {
             await ProductService.updateProductQuantity(
@@ -133,7 +245,17 @@ class SaleProvider extends ChangeNotifier {
         }
         
         _sales.add(sale);
-        clearCart();
+
+        // Remove the completed draft and switch to another open one,
+        // or reset it as empty if it's the only draft.
+        if (_drafts.length > 1) {
+          _drafts.remove(draft);
+          _activeDraftId = _drafts.last.id;
+        } else {
+          draft.items = [];
+          draft.discountAmount = 0;
+        }
+        Future.microtask(() => notifyListeners());
       }
       return success;
     } catch (e) {

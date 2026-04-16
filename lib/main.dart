@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'providers/auth_provider.dart';
 import 'providers/product_provider.dart';
 import 'providers/sale_provider.dart';
+import 'providers/account_provider.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'services/init_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await initializeDateFormatting('pt_BR');
   await InitService.initializeAppData();
   runApp(const MyApp());
 }
@@ -23,6 +26,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => ProductProvider()),
         ChangeNotifierProvider(create: (_) => SaleProvider()),
+        ChangeNotifierProvider(create: (_) => AccountProvider()),
       ],
       child: MaterialApp(
         title: 'Lotus PDV',
@@ -35,7 +39,6 @@ class MyApp extends StatelessWidget {
             primary: const Color(0xFF7C3AED),
             secondary: const Color(0xFFA78BFA),
             surface: const Color(0xFFFAFAFC),
-            background: const Color(0xFFF8F8FF),
             tertiary: const Color(0xFF10B981),
           ),
           appBarTheme: const AppBarTheme(

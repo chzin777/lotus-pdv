@@ -57,6 +57,13 @@ class StorageService {
     return path.path;
   }
 
+  static Future<void> ensureDirectory(String path) async {
+    final dir = Directory(path);
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
+    }
+  }
+
   static Future<void> writeFile(String fileName, String content, {required String directory}) async {
     final path = '$directory/$fileName';
     final file = File(path);
