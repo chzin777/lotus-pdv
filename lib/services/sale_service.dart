@@ -1,6 +1,7 @@
 import 'package:csv/csv.dart';
 import 'storage_service.dart';
 import '../models/sale.dart';
+import 'product_service.dart';
 
 class SaleService {
   static const String _fileName = 'sales.csv';
@@ -232,17 +233,29 @@ class SaleService {
 
   static Future<Map<String, dynamic>> getSalesReport(DateTime startDate, DateTime endDate) async {
     final sales = await getSalesByDateRange(startDate, endDate);
-    
-    double totalRevenue = 0;
+    final products = await ProductService.getProducts();
+    final costMap = <String, double>{};
+    for (var p in products) {
+      costMap[p.id] = p.costPrice;
+    }
+
+    double grossRevenue = 0;
+    double netRevenue = 0;
     double totalDiscount = 0;
+    double productCost = 0;
     int totalItems = 0;
     int completedSales = 0;
     int cancelledSales = 0;
 
     for (var sale in sales) {
       if (sale.status == 'completed') {
-        totalRevenue += sale.finalAmount;
+        grossRevenue += sale.totalAmount;
+        netRevenue += sale.finalAmount;
         completedSales++;
+        for (var item in sale.items) {
+          final cost = costMap[item.productId] ?? 0.0;
+          productCost += cost * item.quantity;
+        }
       } else if (sale.status == 'cancelled') {
         cancelledSales++;
       }
@@ -251,12 +264,15 @@ class SaleService {
     }
 
     return {
-      'totalRevenue': totalRevenue,
+      'grossRevenue': grossRevenue,
+      'netRevenue': netRevenue,
+      'totalRevenue': netRevenue,
       'totalDiscount': totalDiscount,
+      'productCost': productCost,
       'totalItems': totalItems,
       'completedSales': completedSales,
       'cancelledSales': cancelledSales,
-      'averageTicket': completedSales > 0 ? totalRevenue / completedSales : 0,
+      'averageTicket': completedSales > 0 ? netRevenue / completedSales : 0,
     };
   }
 }

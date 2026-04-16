@@ -14,12 +14,34 @@ class ReportsScreen extends StatefulWidget {
 class _ReportsScreenState extends State<ReportsScreen> {
   late DateTime _startDate;
   late DateTime _endDate;
+  int? _selectedMonthIndex; // null = custom period
+  bool _useCustomPeriod = false;
+
+  static const _monthNames = [
+    'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun',
+    'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez',
+  ];
 
   @override
   void initState() {
     super.initState();
-    _endDate = DateTime.now();
-    _startDate = _endDate.subtract(const Duration(days: 30));
+    final now = DateTime.now();
+    _selectedMonthIndex = now.month - 1;
+    _applyMonthFilter(_selectedMonthIndex!);
+  }
+
+  void _applyMonthFilter(int monthIndex) {
+    final now = DateTime.now();
+    final year = now.year;
+    final month = monthIndex + 1;
+    _startDate = DateTime(year, month, 1);
+    _endDate = (month == 12)
+        ? DateTime(year + 1, 1, 1).subtract(const Duration(seconds: 1))
+        : DateTime(year, month + 1, 1).subtract(const Duration(seconds: 1));
+    // Clamp end date to now if the month is current or future
+    if (_endDate.isAfter(now)) {
+      _endDate = now;
+    }
   }
 
   String _fmt(DateTime dt) => DateFormat('dd/MM/yyyy').format(dt);
@@ -57,6 +79,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
   @override
   Widget build(BuildContext context) {
     final saleProvider = context.read<SaleProvider>();
+    final now = DateTime.now();
+    final currentMonth = now.month - 1;
 
     return Container(
       color: const Color(0xFFF8FAFC),
@@ -108,26 +132,71 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
                 const SizedBox(height: 20),
 
-                // Date picker row
-                Row(
-                  children: [
-                    _DatePickerChip(
-                      label: 'Início',
-                      date: _fmt(_startDate),
-                      onTap: () => _pickDate(true),
-                    ),
-                    const SizedBox(width: 10),
-                    const Icon(Icons.arrow_forward_rounded, size: 18, color: Color(0xFF94A3B8)),
-                    const SizedBox(width: 10),
-                    _DatePickerChip(
-                      label: 'Fim',
-                      date: _fmt(_endDate),
-                      onTap: () => _pickDate(false),
-                    ),
-                  ],
-                ).animate().fadeIn(duration: 400.ms, delay: 100.ms),
+                // Month filter chips
+                SizedBox(
+                  height: 42,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: currentMonth + 2, // months + "Período" chip
+                    separatorBuilder: (_, __) => const SizedBox(width: 8),
+                    itemBuilder: (context, index) {
+                      // Last chip is "Período" (custom range)
+                      if (index == currentMonth + 1) {
+                        final isActive = _useCustomPeriod;
+                        return _FilterChip(
+                          label: 'Período',
+                          icon: Icons.date_range_rounded,
+                          isActive: isActive,
+                          onTap: () {
+                            setState(() {
+                              _useCustomPeriod = true;
+                              _selectedMonthIndex = null;
+                              _endDate = DateTime.now();
+                              _startDate = _endDate.subtract(const Duration(days: 30));
+                            });
+                          },
+                        );
+                      }
 
-                const SizedBox(height: 24),
+                      final isActive = !_useCustomPeriod && _selectedMonthIndex == index;
+                      return _FilterChip(
+                        label: _monthNames[index],
+                        isActive: isActive,
+                        onTap: () {
+                          setState(() {
+                            _useCustomPeriod = false;
+                            _selectedMonthIndex = index;
+                            _applyMonthFilter(index);
+                          });
+                        },
+                      );
+                    },
+                  ),
+                ).animate().fadeIn(duration: 400.ms, delay: 80.ms),
+
+                const SizedBox(height: 14),
+
+                // Custom date picker row (only when "Período" is active)
+                if (_useCustomPeriod)
+                  Row(
+                    children: [
+                      _DatePickerChip(
+                        label: 'Início',
+                        date: _fmt(_startDate),
+                        onTap: () => _pickDate(true),
+                      ),
+                      const SizedBox(width: 10),
+                      const Icon(Icons.arrow_forward_rounded, size: 18, color: Color(0xFF94A3B8)),
+                      const SizedBox(width: 10),
+                      _DatePickerChip(
+                        label: 'Fim',
+                        date: _fmt(_endDate),
+                        onTap: () => _pickDate(false),
+                      ),
+                    ],
+                  ).animate().fadeIn(duration: 400.ms),
+
+                if (_useCustomPeriod) const SizedBox(height: 24) else const SizedBox(height: 10),
 
                 // KPI Grid
                 LayoutBuilder(
@@ -136,6 +205,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     final gap = 14.0;
                     final w = (box.maxWidth - gap * (cols - 1)) / cols;
 
+                    final grossRevenue = (report['grossRevenue'] as num).toDouble();
+                    final netRevenue = (report['netRevenue'] as num).toDouble();
+                    final productCost = (report['productCost'] as num).toDouble();
+                    final profit = netRevenue - productCost;
+
                     return Wrap(
                       spacing: gap,
                       runSpacing: gap,
@@ -143,10 +217,39 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         SizedBox(
                           width: w,
                           child: _ReportKpi(
-                            title: 'Receita Total',
-                            value: 'R\$ ${((report['totalRevenue'] as num).toDouble()).toStringAsFixed(2)}',
+                            title: 'Faturamento Bruto',
+                            value: 'R\$ ${grossRevenue.toStringAsFixed(2)}',
                             icon: Icons.trending_up_rounded,
+                            gradient: const [Color(0xFF3B82F6), Color(0xFF2563EB)],
+                          ),
+                        ),
+                        SizedBox(
+                          width: w,
+                          child: _ReportKpi(
+                            title: 'Faturamento Líquido',
+                            value: 'R\$ ${netRevenue.toStringAsFixed(2)}',
+                            icon: Icons.account_balance_wallet_rounded,
                             gradient: const [Color(0xFF10B981), Color(0xFF059669)],
+                          ),
+                        ),
+                        SizedBox(
+                          width: w,
+                          child: _ReportKpi(
+                            title: 'Gasto com Produtos',
+                            value: 'R\$ ${productCost.toStringAsFixed(2)}',
+                            icon: Icons.inventory_2_rounded,
+                            gradient: const [Color(0xFFEF4444), Color(0xFFDC2626)],
+                          ),
+                        ),
+                        SizedBox(
+                          width: w,
+                          child: _ReportKpi(
+                            title: 'Lucro',
+                            value: 'R\$ ${profit.toStringAsFixed(2)}',
+                            icon: Icons.savings_rounded,
+                            gradient: profit >= 0
+                                ? const [Color(0xFF7C3AED), Color(0xFF4F46E5)]
+                                : const [Color(0xFFF59E0B), Color(0xFFD97706)],
                           ),
                         ),
                         SizedBox(
@@ -202,6 +305,72 @@ class _ReportsScreenState extends State<ReportsScreen> {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+// ── Filter Chip ──
+
+class _FilterChip extends StatefulWidget {
+  final String label;
+  final IconData? icon;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  const _FilterChip({required this.label, this.icon, required this.isActive, required this.onTap});
+
+  @override
+  State<_FilterChip> createState() => _FilterChipState();
+}
+
+class _FilterChipState extends State<_FilterChip> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+          decoration: BoxDecoration(
+            color: widget.isActive
+                ? const Color(0xFF7C3AED)
+                : _hovered
+                    ? const Color(0xFF7C3AED).withValues(alpha: 0.08)
+                    : Colors.white,
+            borderRadius: BorderRadius.circular(100),
+            border: Border.all(
+              color: widget.isActive
+                  ? const Color(0xFF7C3AED)
+                  : _hovered
+                      ? const Color(0xFF7C3AED).withValues(alpha: 0.3)
+                      : const Color(0xFFE2E8F0),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (widget.icon != null) ...[
+                Icon(widget.icon, size: 16, color: widget.isActive ? Colors.white : const Color(0xFF7C3AED)),
+                const SizedBox(width: 6),
+              ],
+              Text(
+                widget.label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: widget.isActive ? Colors.white : const Color(0xFF334155),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

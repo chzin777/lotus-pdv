@@ -9,7 +9,8 @@ import '../providers/account_provider.dart';
 import '../models/sale.dart';
 
 class POSScreen extends StatefulWidget {
-  const POSScreen({Key? key}) : super(key: key);
+  final bool isActive;
+  const POSScreen({Key? key, this.isActive = false}) : super(key: key);
 
   @override
   State<POSScreen> createState() => _POSScreenState();
@@ -18,6 +19,7 @@ class POSScreen extends StatefulWidget {
 class _POSScreenState extends State<POSScreen> {
   late TextEditingController _searchController;
   late TextEditingController _discountController;
+  final FocusNode _searchFocusNode = FocusNode();
 
   @override
   void initState() {
@@ -27,9 +29,20 @@ class _POSScreenState extends State<POSScreen> {
   }
 
   @override
+  void didUpdateWidget(covariant POSScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive && !oldWidget.isActive) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _searchFocusNode.requestFocus();
+      });
+    }
+  }
+
+  @override
   void dispose() {
     _searchController.dispose();
     _discountController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
   }
 
@@ -62,6 +75,8 @@ class _POSScreenState extends State<POSScreen> {
                 context.read<SaleProvider>().addToCart(product, quantity);
               }
               Navigator.pop(context);
+              _searchController.clear();
+              _searchFocusNode.requestFocus();
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF7C3AED),
@@ -628,6 +643,7 @@ class _POSScreenState extends State<POSScreen> {
                   padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
                   child: TextField(
                     controller: _searchController,
+                    focusNode: _searchFocusNode,
                     autofocus: true,
                     decoration: InputDecoration(
                       hintText: 'Buscar produtos...',

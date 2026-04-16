@@ -3,6 +3,9 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/sale_provider.dart';
+import '../models/sale.dart';
+
+enum _HistoryFilter { day, month, period }
 
 class SalesHistoryScreen extends StatefulWidget {
   const SalesHistoryScreen({Key? key}) : super(key: key);
@@ -13,11 +16,26 @@ class SalesHistoryScreen extends StatefulWidget {
 
 class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
   late TextEditingController _reasonController;
+  _HistoryFilter _activeFilter = _HistoryFilter.day;
+  late DateTime _selectedDay;
+  late int _selectedMonthIndex;
+  late DateTime _periodStart;
+  late DateTime _periodEnd;
+
+  static const _monthNames = [
+    'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun',
+    'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez',
+  ];
 
   @override
   void initState() {
     super.initState();
     _reasonController = TextEditingController();
+    final now = DateTime.now();
+    _selectedDay = DateTime(now.year, now.month, now.day);
+    _selectedMonthIndex = now.month - 1;
+    _periodStart = now.subtract(const Duration(days: 30));
+    _periodEnd = now;
     Future.microtask(() {
       context.read<SaleProvider>().loadSales();
     });
@@ -27,6 +45,99 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
   void dispose() {
     _reasonController.dispose();
     super.dispose();
+  }
+
+  List<Sale> _applyFilter(List<Sale> sales) {
+    final now = DateTime.now();
+    switch (_activeFilter) {
+      case _HistoryFilter.day:
+        return sales.where((s) {
+          return s.createdAt.year == _selectedDay.year &&
+              s.createdAt.month == _selectedDay.month &&
+              s.createdAt.day == _selectedDay.day;
+        }).toList();
+      case _HistoryFilter.month:
+        final month = _selectedMonthIndex + 1;
+        final year = now.year;
+        return sales.where((s) {
+          return s.createdAt.year == year && s.createdAt.month == month;
+        }).toList();
+      case _HistoryFilter.period:
+        final start = DateTime(_periodStart.year, _periodStart.month, _periodStart.day);
+        final end = DateTime(_periodEnd.year, _periodEnd.month, _periodEnd.day, 23, 59, 59);
+        return sales.where((s) {
+          return s.createdAt.isAfter(start.subtract(const Duration(seconds: 1))) &&
+              s.createdAt.isBefore(end.add(const Duration(seconds: 1)));
+        }).toList();
+    }
+  }
+
+  String _filterLabel() {
+    switch (_activeFilter) {
+      case _HistoryFilter.day:
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        if (_selectedDay == today) return 'Hoje';
+        return DateFormat('dd/MM/yyyy').format(_selectedDay);
+      case _HistoryFilter.month:
+        return _monthNames[_selectedMonthIndex];
+      case _HistoryFilter.period:
+        return '${DateFormat('dd/MM').format(_periodStart)} - ${DateFormat('dd/MM').format(_periodEnd)}';
+    }
+  }
+
+  Future<void> _pickDay() async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: _selectedDay,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFF7C3AED),
+              onPrimary: Colors.white,
+              surface: Colors.white,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (date != null) {
+      setState(() => _selectedDay = date);
+    }
+  }
+
+  Future<void> _pickPeriodDate(bool isStart) async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: isStart ? _periodStart : _periodEnd,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFF7C3AED),
+              onPrimary: Colors.white,
+              surface: Colors.white,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (date != null) {
+      setState(() {
+        if (isStart) {
+          _periodStart = date;
+        } else {
+          _periodEnd = date;
+        }
+      });
+    }
   }
 
   void _showCancelDialog(BuildContext context, String saleId) {
@@ -128,7 +239,10 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
   @override
   Widget build(BuildContext context) {
     final saleProvider = context.watch<SaleProvider>();
-    final sales = [...saleProvider.sales]..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    final allSales = [...saleProvider.sales]..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    final sales = _applyFilter(allSales);
+    final now = DateTime.now();
+    final currentMonth = now.month - 1;
 
     if (saleProvider.isLoading) {
       return const Center(child: CircularProgressIndicator(color: Color(0xFF7C3AED)));
@@ -151,12 +265,109 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '${sales.length} vendas registradas',
+                  '${sales.length} vendas encontradas  ·  ${_filterLabel()}',
                   style: const TextStyle(fontSize: 14, color: Color(0xFF64748B)),
                 ),
               ],
             ),
           ).animate().fadeIn(duration: 400.ms).slideY(begin: -0.06, end: 0),
+
+          const SizedBox(height: 16),
+
+          // Filter bar
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 28),
+            child: Column(
+              children: [
+                // Filter type chips
+                Row(
+                  children: [
+                    _HistoryFilterChip(
+                      label: 'Dia',
+                      icon: Icons.today_rounded,
+                      isActive: _activeFilter == _HistoryFilter.day,
+                      onTap: () => setState(() => _activeFilter = _HistoryFilter.day),
+                    ),
+                    const SizedBox(width: 8),
+                    _HistoryFilterChip(
+                      label: 'Mês',
+                      icon: Icons.calendar_month_rounded,
+                      isActive: _activeFilter == _HistoryFilter.month,
+                      onTap: () => setState(() => _activeFilter = _HistoryFilter.month),
+                    ),
+                    const SizedBox(width: 8),
+                    _HistoryFilterChip(
+                      label: 'Período',
+                      icon: Icons.date_range_rounded,
+                      isActive: _activeFilter == _HistoryFilter.period,
+                      onTap: () => setState(() => _activeFilter = _HistoryFilter.period),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 12),
+
+                // Filter controls
+                if (_activeFilter == _HistoryFilter.day)
+                  _DayFilterRow(
+                    selectedDay: _selectedDay,
+                    onPickDay: _pickDay,
+                    onPreviousDay: () {
+                      setState(() {
+                        _selectedDay = _selectedDay.subtract(const Duration(days: 1));
+                      });
+                    },
+                    onNextDay: () {
+                      final tomorrow = _selectedDay.add(const Duration(days: 1));
+                      if (!tomorrow.isAfter(DateTime.now())) {
+                        setState(() => _selectedDay = tomorrow);
+                      }
+                    },
+                    onToday: () {
+                      final today = DateTime(now.year, now.month, now.day);
+                      setState(() => _selectedDay = today);
+                    },
+                  ),
+
+                if (_activeFilter == _HistoryFilter.month)
+                  SizedBox(
+                    height: 38,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: currentMonth + 1,
+                      separatorBuilder: (_, __) => const SizedBox(width: 8),
+                      itemBuilder: (context, index) {
+                        final isActive = _selectedMonthIndex == index;
+                        return _MonthChip(
+                          label: _monthNames[index],
+                          isActive: isActive,
+                          onTap: () => setState(() => _selectedMonthIndex = index),
+                        );
+                      },
+                    ),
+                  ),
+
+                if (_activeFilter == _HistoryFilter.period)
+                  Row(
+                    children: [
+                      _PeriodDateChip(
+                        label: 'Início',
+                        date: DateFormat('dd/MM/yyyy').format(_periodStart),
+                        onTap: () => _pickPeriodDate(true),
+                      ),
+                      const SizedBox(width: 10),
+                      const Icon(Icons.arrow_forward_rounded, size: 18, color: Color(0xFF94A3B8)),
+                      const SizedBox(width: 10),
+                      _PeriodDateChip(
+                        label: 'Fim',
+                        date: DateFormat('dd/MM/yyyy').format(_periodEnd),
+                        onTap: () => _pickPeriodDate(false),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+          ).animate().fadeIn(duration: 400.ms, delay: 80.ms),
 
           const SizedBox(height: 18),
 
@@ -177,9 +388,12 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
                           child: const Icon(Icons.receipt_long_outlined, color: Color(0xFF94A3B8), size: 28),
                         ),
                         const SizedBox(height: 12),
-                        const Text('Nenhuma venda registrada', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF334155))),
+                        const Text('Nenhuma venda encontrada', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF334155))),
                         const SizedBox(height: 4),
-                        const Text('As vendas finalizadas aparecem aqui', style: TextStyle(fontSize: 13, color: Color(0xFF94A3B8))),
+                        Text(
+                          'Sem vendas para ${_filterLabel().toLowerCase()}',
+                          style: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+                        ),
                       ],
                     ),
                   )
@@ -202,10 +416,294 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
   }
 }
 
+// ── History Filter Chip ──
+
+class _HistoryFilterChip extends StatefulWidget {
+  final String label;
+  final IconData icon;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  const _HistoryFilterChip({required this.label, required this.icon, required this.isActive, required this.onTap});
+
+  @override
+  State<_HistoryFilterChip> createState() => _HistoryFilterChipState();
+}
+
+class _HistoryFilterChipState extends State<_HistoryFilterChip> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+          decoration: BoxDecoration(
+            color: widget.isActive
+                ? const Color(0xFF7C3AED)
+                : _hovered
+                    ? const Color(0xFF7C3AED).withValues(alpha: 0.08)
+                    : Colors.white,
+            borderRadius: BorderRadius.circular(100),
+            border: Border.all(
+              color: widget.isActive
+                  ? const Color(0xFF7C3AED)
+                  : _hovered
+                      ? const Color(0xFF7C3AED).withValues(alpha: 0.3)
+                      : const Color(0xFFE2E8F0),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(widget.icon, size: 16, color: widget.isActive ? Colors.white : const Color(0xFF7C3AED)),
+              const SizedBox(width: 6),
+              Text(
+                widget.label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: widget.isActive ? Colors.white : const Color(0xFF334155),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Day Filter Row ──
+
+class _DayFilterRow extends StatelessWidget {
+  final DateTime selectedDay;
+  final VoidCallback onPickDay;
+  final VoidCallback onPreviousDay;
+  final VoidCallback onNextDay;
+  final VoidCallback onToday;
+
+  const _DayFilterRow({
+    required this.selectedDay,
+    required this.onPickDay,
+    required this.onPreviousDay,
+    required this.onNextDay,
+    required this.onToday,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final isToday = selectedDay == today;
+
+    return Row(
+      children: [
+        _SmallIconButton(icon: Icons.chevron_left_rounded, onTap: onPreviousDay),
+        const SizedBox(width: 6),
+        GestureDetector(
+          onTap: onPickDay,
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.calendar_today_rounded, size: 14, color: Color(0xFF7C3AED)),
+                  const SizedBox(width: 8),
+                  Text(
+                    isToday ? 'Hoje' : DateFormat('dd/MM/yyyy').format(selectedDay),
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        _SmallIconButton(icon: Icons.chevron_right_rounded, onTap: onNextDay),
+        const SizedBox(width: 10),
+        if (!isToday)
+          GestureDetector(
+            onTap: onToday,
+            child: MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF7C3AED).withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Text('Hoje', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF7C3AED))),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _SmallIconButton extends StatefulWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _SmallIconButton({required this.icon, required this.onTap});
+
+  @override
+  State<_SmallIconButton> createState() => _SmallIconButtonState();
+}
+
+class _SmallIconButtonState extends State<_SmallIconButton> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: _hovered ? const Color(0xFF7C3AED).withValues(alpha: 0.08) : Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: Icon(widget.icon, size: 20, color: const Color(0xFF64748B)),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Month Chip ──
+
+class _MonthChip extends StatefulWidget {
+  final String label;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  const _MonthChip({required this.label, required this.isActive, required this.onTap});
+
+  @override
+  State<_MonthChip> createState() => _MonthChipState();
+}
+
+class _MonthChipState extends State<_MonthChip> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: widget.isActive
+                ? const Color(0xFF7C3AED)
+                : _hovered
+                    ? const Color(0xFF7C3AED).withValues(alpha: 0.08)
+                    : Colors.white,
+            borderRadius: BorderRadius.circular(100),
+            border: Border.all(
+              color: widget.isActive
+                  ? const Color(0xFF7C3AED)
+                  : const Color(0xFFE2E8F0),
+            ),
+          ),
+          child: Text(
+            widget.label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: widget.isActive ? Colors.white : const Color(0xFF334155),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Period Date Chip ──
+
+class _PeriodDateChip extends StatefulWidget {
+  final String label;
+  final String date;
+  final VoidCallback onTap;
+
+  const _PeriodDateChip({required this.label, required this.date, required this.onTap});
+
+  @override
+  State<_PeriodDateChip> createState() => _PeriodDateChipState();
+}
+
+class _PeriodDateChipState extends State<_PeriodDateChip> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: _hovered ? const Color(0xFF7C3AED).withValues(alpha: 0.06) : Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: _hovered ? const Color(0xFF7C3AED).withValues(alpha: 0.25) : const Color(0xFFE2E8F0),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.calendar_today_rounded, size: 14, color: Color(0xFF7C3AED)),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(widget.label, style: const TextStyle(fontSize: 10, color: Color(0xFF94A3B8), fontWeight: FontWeight.w600)),
+                  Text(widget.date, style: const TextStyle(fontSize: 13, color: Color(0xFF0F172A), fontWeight: FontWeight.w700)),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 // ── Sale Card ──
 
 class _SaleCard extends StatefulWidget {
-  final dynamic sale;
+  final Sale sale;
   final String Function(DateTime) formatDate;
   final VoidCallback onCancel;
 
@@ -449,7 +947,6 @@ class _PaymentDetail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // raw format: "Dinheiro:50.00;Crédito:15.00"
     final parts = raw.split(';').where((s) => s.trim().isNotEmpty).toList();
 
     return Row(

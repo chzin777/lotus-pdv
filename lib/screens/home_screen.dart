@@ -71,7 +71,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   firstName: firstName,
                   onNavigate: (i) => setState(() => _selectedIndex = i),
                 ),
-                const POSScreen(),
+                POSScreen(isActive: _selectedIndex == 1),
                 const ProductsScreen(),
                 const SalesHistoryScreen(),
                 const AccountsScreen(),
