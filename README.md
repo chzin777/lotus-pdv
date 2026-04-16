@@ -187,9 +187,9 @@ Este projeto é de código aberto e pode ser usado livremente.
 
 ## 👨‍💻 Autor
 
-Desenvolvido com ❤️ para melhorar o gerenciamento de negócios.
+Christofer Henrique 
 
 ---
 
 **Versão**: 1.0.0  
-**Atualizado**: 2024
+**Atualizado**: 2026
