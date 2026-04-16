@@ -628,6 +628,7 @@ class _POSScreenState extends State<POSScreen> {
                   padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
                   child: TextField(
                     controller: _searchController,
+                    autofocus: true,
                     decoration: InputDecoration(
                       hintText: 'Buscar produtos...',
                       hintStyle: const TextStyle(color: Color(0xFF94A3B8)),

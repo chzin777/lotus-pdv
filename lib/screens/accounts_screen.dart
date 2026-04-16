@@ -407,9 +407,12 @@ class _AccountCardState extends State<_AccountCard> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          a.phone.isNotEmpty
-                              ? '${a.phone} \u2022 ${a.entries.length} lançamentos'
-                              : '${a.entries.length} lançamentos',
+                          [
+                            if (a.phone.isNotEmpty) a.phone,
+                            '${a.entries.length} lançamentos',
+                            if (!isOpen && a.settledAt != null)
+                              'Quitada em ${widget.formatDate(a.settledAt!)}',
+                          ].join(' \u2022 '),
                           style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
                         ),
                       ],

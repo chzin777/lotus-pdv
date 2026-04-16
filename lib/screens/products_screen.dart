@@ -33,8 +33,8 @@ class _ProductsScreenState extends State<ProductsScreen> {
   void _showProductDialog({Product? product}) {
     final nameCtrl = TextEditingController(text: product?.name ?? '');
     final descCtrl = TextEditingController(text: product?.description ?? '');
-    final costCtrl = TextEditingController(text: product?.costPrice.toString() ?? '');
-    final priceCtrl = TextEditingController(text: product?.sellingPrice.toString() ?? '');
+    final costCtrl = TextEditingController(text: product != null ? product.costPrice.toStringAsFixed(2).replaceAll('.', ',') : '');
+    final priceCtrl = TextEditingController(text: product != null ? product.sellingPrice.toStringAsFixed(2).replaceAll('.', ',') : '');
     final qtdCtrl = TextEditingController(text: product?.quantity.toString() ?? '0');
     final categoryCtrl = TextEditingController(text: product?.category ?? 'Geral');
     final skuCtrl = TextEditingController(text: product?.sku ?? '');
@@ -127,9 +127,9 @@ class _ProductsScreenState extends State<ProductsScreen> {
                   ),
                   Row(
                     children: [
-                      Expanded(child: _DialogField(controller: costCtrl, label: 'Preço de Custo', keyboard: TextInputType.number)),
+                      Expanded(child: _DialogField(controller: costCtrl, label: 'Preço de Custo (R\$)', keyboard: TextInputType.number)),
                       const SizedBox(width: 12),
-                      Expanded(child: _DialogField(controller: priceCtrl, label: 'Preço de Venda', keyboard: TextInputType.number)),
+                      Expanded(child: _DialogField(controller: priceCtrl, label: 'Preço de Venda (R\$)', keyboard: TextInputType.number)),
                     ],
                   ),
                   _DialogField(controller: qtdCtrl, label: 'Quantidade', keyboard: TextInputType.number),
@@ -156,8 +156,8 @@ class _ProductsScreenState extends State<ProductsScreen> {
                   id: product?.id ?? const Uuid().v4(),
                   name: nameCtrl.text,
                   description: descCtrl.text,
-                  costPrice: double.tryParse(costCtrl.text) ?? 0,
-                  sellingPrice: double.tryParse(priceCtrl.text) ?? 0,
+                  costPrice: double.tryParse(costCtrl.text.replaceAll(',', '.')) ?? 0,
+                  sellingPrice: double.tryParse(priceCtrl.text.replaceAll(',', '.')) ?? 0,
                   quantity: int.tryParse(qtdCtrl.text) ?? 0,
                   category: categoryCtrl.text.isEmpty ? 'Geral' : categoryCtrl.text,
                   imagePath: imagePath,

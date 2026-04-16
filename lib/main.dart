@@ -7,6 +7,7 @@ import 'providers/sale_provider.dart';
 import 'providers/account_provider.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
+import 'screens/splash_screen.dart';
 import 'services/init_service.dart';
 
 void main() async {
@@ -92,18 +93,40 @@ class MyApp extends StatelessWidget {
             unselectedItemColor: Color(0xFF9CA3AF),
           ),
         ),
-        home: Consumer<AuthProvider>(
-          builder: (context, authProvider, _) {
-            return authProvider.isAuthenticated
-                ? const HomeScreen()
-                : const LoginScreen();
-          },
-        ),
+        home: const _AppEntry(),
         routes: {
           '/login': (context) => const LoginScreen(),
           '/home': (context) => const HomeScreen(),
         },
       ),
+    );
+  }
+}
+
+class _AppEntry extends StatefulWidget {
+  const _AppEntry();
+
+  @override
+  State<_AppEntry> createState() => _AppEntryState();
+}
+
+class _AppEntryState extends State<_AppEntry> {
+  bool _splashDone = false;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_splashDone) {
+      return SplashScreen(
+        onFinished: () => setState(() => _splashDone = true),
+      );
+    }
+
+    return Consumer<AuthProvider>(
+      builder: (context, authProvider, _) {
+        return authProvider.isAuthenticated
+            ? const HomeScreen()
+            : const LoginScreen();
+      },
     );
   }
 }
