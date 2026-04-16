@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'providers/auth_provider.dart';
@@ -35,6 +36,7 @@ class MyApp extends StatelessWidget {
         theme: ThemeData(
           useMaterial3: true,
           brightness: Brightness.light,
+          textTheme: GoogleFonts.righteousTextTheme(),
           scaffoldBackgroundColor: const Color(0xFFF8F8FF),
           colorScheme: ColorScheme.light(
             primary: const Color(0xFF7C3AED),
